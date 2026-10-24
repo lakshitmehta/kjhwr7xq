@@ -2,7 +2,7 @@
 
 An analytics dashboard evaluating UK day-ahead wind generation forecasts (**WINDFOR**) against half-hourly metered generation outturn (**FUELHH**) from the official Elexon BMRS Insights Solution for January 2026.
 
-**Live dashboard:** https://renewable-wind-forecast-dashboard-alq57d71u-d7-134b.vercel.app
+**Live dashboard:** https://renewable-wind-forecast-frontend.vercel.app/
 
 ---
 
