@@ -38,6 +38,28 @@ def test_static_files_exist_and_size_reasonable():
         # Files should be non-empty and under 1.5MB uncompressed (< 50KB gzipped)
         assert 100 < size_bytes < 1_500_000, f"{filename} unexpected size: {size_bytes} bytes"
 
+        # Verify not HTML
+        content = filepath.read_text(encoding="utf-8")
+        assert not content.strip().startswith("<!doctype"), f"{filename} starts with <!doctype"
+        assert not content.strip().startswith("<html"), f"{filename} starts with <html"
+
+
+def test_dist_data_files_match_public_data():
+    """Verify production build dist/data contains all 7 files without HTML markup."""
+    dist_data_dir = FRONTEND_DATA_DIR.parent.parent / "dist" / "data"
+    if not dist_data_dir.exists():
+        pytest.skip("dist directory not yet built")
+
+    for filename in EXPECTED_FILES:
+        dist_file = dist_data_dir / filename
+        assert dist_file.exists(), f"Missing file in dist/data: {filename}"
+        content = dist_file.read_text(encoding="utf-8")
+        assert not content.strip().startswith("<!doctype"), f"dist {filename} contains HTML doctype"
+        assert not content.strip().startswith("<html"), f"dist {filename} contains HTML markup"
+        # Must be parseable JSON
+        data = json.loads(content)
+        assert data is not None
+
 
 def test_health_json_schema():
     """Verify health.json metadata."""

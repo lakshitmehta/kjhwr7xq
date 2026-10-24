@@ -242,6 +242,18 @@ describe('API Service - Static Mode & Metric Calculations', () => {
         'Health check failed: unable to reach live backend or static health.json'
       );
     });
+
+    it('throws when /data/health.json returns HTML instead of JSON', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'text/html' },
+        text: async () => '<!doctype html><html><body>SPA</body></html>',
+      } as unknown as Response);
+
+      await expect(checkBackendHealth()).rejects.toThrow(
+        'Endpoint static health.json returned HTML instead of JSON.'
+      );
+    });
   });
 
   describe('fetchCutoffOptions', () => {
@@ -465,6 +477,18 @@ describe('API Service - Static Mode & Metric Calculations', () => {
       await expect(
         fetchDashboardData('2026-01-01', '2026-01-31', '99:99')
       ).rejects.toThrow('Failed to load dataset for cutoff 99:99 (HTTP 404)');
+    });
+
+    it('throws when /data/eval_*.json returns HTML instead of JSON', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        headers: { get: () => 'text/html' },
+        text: async () => '<!doctype html><html><body>SPA</body></html>',
+      } as unknown as Response);
+
+      await expect(
+        fetchDashboardData('2026-01-01', '2026-01-31', '11:00')
+      ).rejects.toThrow('Endpoint /data/eval_1100.json returned HTML instead of JSON.');
     });
   });
 
