@@ -1,236 +1,266 @@
 # UK Renewable Wind Generation Forecast Dashboard
 
-An enterprise-grade analytics dashboard evaluating UK National Grid Day-Ahead Wind Generation Forecasts (**WINDFOR**) against native half-hourly Outturn Actuals (**FUELHH**) from the official **Elexon BMRS Insights Solution** for January 2026.
+An analytics dashboard evaluating UK day-ahead wind generation forecasts (**WINDFOR**) against half-hourly metered generation outturn (**FUELHH**) from the official Elexon BMRS Insights Solution for January 2026.
+
+**Live dashboard:** https://renewable-wind-forecast-dashboard-alq57d71u-d7-134b.vercel.app
 
 ---
 
-## 🎯 1. Assignment Requirements & Objectives
+## 1. Assignment Requirements and Objectives
 
-- **Core Goal**: Evaluate the predictive accuracy of day-ahead wind power forecasts published prior to gate closure against actual delivery outturns for electricity purchasing decisions in Great Britain.
-- **Delivery Scope**: Full calendar month of January 2026 ($31\text{ days} \times 48\text{ settlement periods} = 1,488\text{ half-hourly periods}$).
-- **Evaluation Criteria**: Calculate Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), Mean Forecast Bias, Weighted Absolute Percentage Error (WAPE), and energy balance totals (MWh) on genuine data. Zero data fabrication.
-- **Architecture**: Decoupled FastAPI backend and React + TypeScript + Tailwind CSS + Recharts frontend.
+- **Core goal:** Evaluate day-ahead wind power forecasts available before a selected cutoff against actual generation outturn in Great Britain.
+- **Evaluation period:** 1–31 January 2026, covering 31 days × 48 settlement periods = **1,488 half-hourly periods**.
+- **Evaluation metrics:** Mean Absolute Error (MAE), Root Mean Squared Error (RMSE), mean forecast bias, Weighted Absolute Percentage Error (WAPE), and energy totals in MWh.
+- **Architecture:** React, TypeScript, Tailwind CSS, and Recharts frontend, with a Python FastAPI backend available for local or optional dynamic use.
+- **Data integrity:** The evaluation uses cached data sourced from Elexon BMRS. No synthetic actual-generation observations are added.
 
----
+## 2. Elexon BMRS Data Sources
 
-## 📡 2. Verified Elexon BMRS API Behavior
+Data is sourced from the official Elexon Insights Solution REST API:
 
-All data is queried or cached from the official **Elexon Insights Solution REST API** (`https://data.elexon.co.uk/bmrs/api/v1`):
+`https://data.elexon.co.uk/bmrs/api/v1`
 
-### A. Actual Generation Outturn: `FUELHH`
-- **Endpoint**: `/datasets/FUELHH?fuelType=WIND`
-- **Nature**: Metered generation outturn aggregated by fuel type across Great Britain.
-- **Resolution**: Native 30-minute settlement periods (SP 1 to 48 daily).
-- **Verified Behavior**: January 2026 contains exactly 1,488 valid half-hour periods with 0 nulls, 0 missing intervals, and 100% data completeness.
+### A. Actual generation outturn: `FUELHH`
 
-### B. Day-Ahead Forecast: `WINDFOR`
-- **Endpoint**: `/datasets/WINDFOR`
-- **Nature**: Official aggregated wind generation forecast produced by the National Energy System Operator (NESO, formerly National Grid ESO) under BSC Section Q.
-- **Resolution**: Hourly forecast profiles published multiple times per day (typically 8 rolling runs daily: 02:30, 04:30, 07:30, 09:30, 11:30, 15:30, 18:30, 22:30 UTC).
-- **Audit Field**: Contains the exact publication timestamp (`publishTime`), enabling strict verification of day-ahead auction cutoff compliance.
-- **Rate & Chunking Limits**: The Elexon BMRS API strictly limits query windows to a maximum of 7 days per request. The pipeline implements automated chunking and exponential backoff retry.
+- **Endpoint:** `/datasets/FUELHH?fuelType=WIND`
+- **Description:** Metered generation outturn aggregated by fuel type across Great Britain.
+- **Resolution:** Native 30-minute settlement periods (SP 1–48 per day).
+- **January 2026 dataset:** 1,488 half-hourly periods, as checked by the project data-validation pipeline.
 
----
+### B. Day-ahead forecast: `WINDFOR`
 
-## ⚖️ 3. Regulatory Rules vs. Analytical Benchmarks vs. Assumptions
+- **Endpoint:** `/datasets/WINDFOR`
+- **Description:** Aggregated wind-generation forecast published by the National Energy System Operator (NESO).
+- **Resolution:** Hourly forecast profiles with multiple publication runs per day.
+- **Audit field:** `publishTime`, used to check whether a forecast was available before the selected cutoff.
+- **API handling:** The backend client chunks requests by date range and retries transient failures.
 
-To maintain strict regulatory clarity, the platform distinguishes between binding market rules, analytical benchmarks, and engineering pipeline assumptions:
+The repository includes cached source data so the evaluation can be reproduced without making a fresh API request for every dashboard visit.
 
-### Legally Binding Exchange Gate Closures (Market Rules)
-1. **09:20 GMT**: **EPEX SPOT GB Day-Ahead 60-min Auction**. Order book gate closure under EPEX SPOT Trading System Rules. The latest available WINDFOR run prior to 09:20 GMT on $D-1$ is typically the 07:30 UTC run.
-2. **09:50 GMT**: **Nord Pool N2EX Day-Ahead Auction**. Order book gate closure under Nord Pool Market Specifications. The latest available WINDFOR run prior to 09:50 GMT on $D-1$ is typically the 09:30 UTC run.
-3. **15:30 GMT**: **EPEX SPOT GB Day-Ahead 30-min Auction**. Afternoon half-hour auction order book gate closure. The latest available WINDFOR run prior to 15:30 GMT on $D-1$ is typically the 11:30 UTC run.
+## 3. Cutoffs, Benchmarks, and Modeling Assumptions
 
-### Analytical & Operational Benchmarks
-4. **11:00 GMT**: **European Single Day-Ahead Coupling (SDAC Reference / 12:00 CET)**. Post-Brexit, GB physical exchange auctions operate outside the pan-European SDAC order book and close earlier (09:20 / 09:50 GMT). However, 11:00 GMT remains the standard analytical benchmark used across energy market research, interconnector flow modeling, and academic literature. At 11:00 GMT on $D-1$, the latest available forecast is the **09:30 UTC run** (the 11:30 UTC run is published 30 minutes after the cutoff and is strictly excluded).
-5. **12:00 GMT**: **UK Operational Midday Scheduling Window**. Operational reference point commonly used by scheduling desks.
+The dashboard provides five evaluation cutoffs: **09:20, 09:50, 11:00, 12:00, and 15:30 GMT**. These scenarios are not all presented as legally binding market deadlines. The project distinguishes market-related cutoffs from analytical benchmarks and engineering assumptions; see the dashboard's Audit panel for the scenario-specific descriptions.
 
-### Pipeline Modeling Assumptions (Engineering Design)
-- **Hourly-to-Half-Hourly Mapping**: WINDFOR forecasts are published at hourly intervals ($HH:00:00Z$). Each hourly forecast value is mapped identically to both corresponding 30-minute settlement periods ($SP_{2k-1}$ and $SP_{2k}$) without synthetic linear interpolation. This reflects real-world flat-block trading and avoids fabricating synthetic intermediate data points.
-- **Zero Lookahead Rule**: For any delivery date $D$, only forecasts with $publishTime \le cutoff_{D-1}$ are considered.
-- **Error Sign Convention**: Error is defined as $e_t = \text{Forecast}_t - \text{Actual}_t$ (positive error = over-forecast).
-- **Energy Conversion**: In Great Britain, power values reported in MW represent the average rate of energy delivery over 30 minutes ($0.5\text{ hour}$). Energy in MWh is computed as $\sum (\text{MW} \times 0.5\text{ h})$.
+### Forecast selection and alignment
 
----
+- **No-lookahead rule:** For a delivery date `D`, only forecast records published on or before the selected cutoff on `D-1` are eligible.
+- **Hourly-to-half-hourly mapping:** WINDFOR forecasts are hourly. Each hourly value is mapped to both corresponding half-hourly settlement periods. No linear interpolation is introduced.
+- **Error convention:** `error = forecast − actual`; a positive value indicates over-forecasting.
+- **Energy conversion:** For half-hourly periods, energy in MWh is calculated as `MW × 0.5 hours`, summed across the selected periods.
 
-## 🔍 4. Energy Totals & Unverified Hypotheses
+These are explicit modeling choices for this evaluation and should not be interpreted as a claim that every forecast value or cutoff is prescribed by a market rule.
 
-### Empirical Observations (Verified Data)
-- **Total Actual Outturn**: **8,616,068.50 MWh** ($\approx 8.62\text{ TWh}$), with average actual generation of **11,580.74 MW**.
-- **Total Day-Ahead Forecast**: **9,985,249.00 MWh** ($\approx 9.99\text{ TWh}$), with average forecast generation of **13,421.03 MW**.
-- **Net Forecast Surplus**: **+1,369,180.50 MWh** ($+1,369.2\text{ GWh}$), reflecting a net **+15.89%** volume over-forecast across January 2026.
-- **Bias Directionality**: 28 out of 31 days in January 2026 experienced positive bias ($\text{Forecast} > \text{Actual}$).
+## 4. January 2026 Results
 
-### Potential Causal Drivers (Explicitly Labeled as Unverified Hypotheses)
-The exact underlying causes of this forecast surplus cannot be definitively confirmed from public BMRS aggregate data alone and are presented strictly as **unverified hypotheses**:
-1. *Transmission Curtailment Hypothesis*: The WINDFOR product predicts unconstrained wind generation potential. During high-wind periods, National Grid ESO frequently curtails Scottish wind farms via the Balancing Mechanism to respect transmission boundary limits (such as the B6 boundary between Scotland and England). Metered actual generation (`FUELHH`) reflects post-curtailment output, which could explain part of the shortfall.
-2. *Turbine Cut-out Hypothesis*: During extreme winter gale events, wind turbines automatically shut down when wind speeds exceed cutoff thresholds (typically $25\text{ m/s}$ / $55\text{ mph}$). If numerical weather prediction models do not capture local gust cut-outs, forecasts will over-predict generation.
-3. *NWP Atmospheric Model Bias Hypothesis*: Numerical weather prediction models ingested by NESO may exhibit systematic boundary-layer wind speed over-estimation during winter high-pressure block transitions.
+### Aggregate observations
 
----
+| Measure | Value |
+|---|---:|
+| Total actual wind generation | 8,616,068.50 MWh |
+| Total forecast wind generation | 9,985,249.00 MWh |
+| Net forecast surplus | +1,369,180.50 MWh |
+| Net surplus relative to actual energy | +15.89% |
+| Average actual generation | 11,580.74 MW |
+| Average forecast generation | 13,421.03 MW |
+| Days with positive daily bias | 28 of 31 |
 
-## 🏗️ 5. Project Structure
+### Forecast error by cutoff
 
-```
+| Cutoff (GMT) | MAE (MW) | RMSE (MW) | Mean bias (MW) | WAPE |
+|---|---:|---:|---:|---:|
+| 09:20 | 2,145.17 | — | — | — |
+| 09:50 | 2,126.12 | 2,620.80 | +1,840.30 | 18.36% |
+| 11:00 | 2,126.12 | 2,620.80 | +1,840.30 | 18.36% |
+| 12:00 | 2,020.64 | — | — | — |
+| 15:30 | 1,984.49 | — | — | — |
+
+Dashes indicate values not listed in this README summary; the dashboard calculates and displays the metrics for each selected cutoff and date range. The 09:50 and 11:00 results are identical in this dataset because both scenarios select the same latest eligible forecast run.
+
+### Potential explanations — hypotheses, not verified causes
+
+Aggregate BMRS data alone does not establish why forecast volume exceeded actual generation. Potential explanations that would require additional evidence include:
+
+1. **Transmission constraints or curtailment:** constrained wind output may contribute to a gap between forecast and metered generation.
+2. **Turbine cut-out during extreme winds:** individual turbines can shut down at very high wind speeds, but this project does not verify that this caused the observed error.
+3. **Weather-model or forecast bias:** systematic errors in weather inputs or forecast modeling may contribute, but this analysis does not isolate their effect.
+
+These are hypotheses only. The dashboard does not claim to identify the causal driver of the forecast surplus.
+
+## 5. Project Structure
+
+```text
 renewable-forecast-dashboard/
 ├── backend/
 │   ├── app/
-│   │   ├── config.py           # Configuration, cutoff definitions & classifications
-│   │   ├── elexon_client.py    # Elexon BMRS HTTP client with 7-day chunking & retries
-│   │   ├── main.py             # FastAPI REST endpoints & CORS
-│   │   ├── metrics.py          # Vectorized metrics engine (MAE/RMSE/Bias/WAPE)
-│   │   ├── pipeline.py         # Cutoff filtering, alignment & audit generation
-│   │   └── schemas.py          # Pydantic serialization models
+│   │   ├── config.py             # Configuration and cutoff definitions
+│   │   ├── elexon_client.py      # Elexon HTTP client, chunking and retries
+│   │   ├── main.py               # FastAPI endpoints and CORS
+│   │   ├── metrics.py            # MAE, RMSE, bias and WAPE calculations
+│   │   ├── pipeline.py           # Cutoff filtering, alignment and audit data
+│   │   └── schemas.py             # Pydantic response schemas
 │   ├── data/
-│   │   ├── fuelhh_jan2026_wind.json   # Cached Elexon FUELHH actuals (1,488 SPs)
-│   │   └── windfor_jan2026.json       # Cached Elexon WINDFOR forecasts (19,272 records)
+│   │   ├── fuelhh_jan2026_wind.json
+│   │   └── windfor_jan2026.json
 │   ├── scripts/
-│   │   └── export_static_datasets.py  # Pipeline exporter for static precomputed JSONs
+│   │   └── export_static_datasets.py
 │   ├── tests/
-│   │   ├── test_api.py         # FastAPI endpoint integration tests
-│   │   ├── test_metrics.py     # KPI formula validation tests
-│   │   ├── test_pipeline.py    # Cutoff filtering & alignment tests
-│   │   ├── test_audit_verification.py # Automated timezone & math audit tests
-│   │   └── test_static_export.py      # Static dataset integrity & leakage tests
-│   ├── Dockerfile              # Docker container definition supporting dynamic $PORT
+│   │   ├── test_api.py
+│   │   ├── test_metrics.py
+│   │   ├── test_pipeline.py
+│   │   ├── test_audit_verification.py
+│   │   └── test_static_export.py
+│   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
 │   ├── public/
-│   │   └── data/               # Precomputed authentic January 2026 benchmark datasets
-│   │       ├── cutoff_options.json    # 5 documented market cutoff configurations
-│   │       ├── health.json            # Static health status metadata
-│   │       ├── eval_0920.json         # 09:20 cutoff dataset (1,488 SPs)
-│   │       ├── eval_0950.json         # 09:50 cutoff dataset (1,488 SPs)
-│   │       ├── eval_1100.json         # 11:00 SDAC cutoff dataset (1,488 SPs)
-│   │       ├── eval_1200.json         # 12:00 cutoff dataset (1,488 SPs)
-│   │       └── eval_1530.json         # 15:30 cutoff dataset (1,488 SPs)
+│   │   └── data/
+│   │       ├── cutoff_options.json
+│   │       ├── health.json
+│   │       ├── eval_0920.json
+│   │       ├── eval_0950.json
+│   │       ├── eval_1100.json
+│   │       ├── eval_1200.json
+│   │       └── eval_1530.json
 │   ├── src/
-│   │   ├── components/         # React dashboard components
-│   │   │   ├── Navbar.tsx      # Health & cache status badge
-│   │   │   ├── FilterBar.tsx   # Date pickers, presets, & cutoff selector
-│   │   │   ├── KpiCards.tsx    # MAE, RMSE, Bias, & WAPE KPI cards
-│   │   │   ├── EnergySummaryCards.tsx # Energy volume & peak comparison
-│   │   │   ├── DataQualityCard.tsx    # Completeness & zero-fabrication badge
-│   │   │   ├── ForecastVsActualChart.tsx # 30-min SP vs Daily mean/peak chart
-│   │   │   ├── ErrorAnalysisChart.tsx    # Residual error bar chart
-│   │   │   ├── DailyAggregatesChart.tsx  # Daily MAE & Bias breakdown
-│   │   │   ├── SettlementTable.tsx       # Searchable ledger with CSV export
-│   │   │   ├── AuditDrawer.tsx           # Full methodology & audit slide-over
-│   │   │   ├── LoadingSkeleton.tsx       # Skeleton loaders
-│   │   │   └── ErrorMessage.tsx          # Error banners with retry
-│   │   ├── services/api.ts     # Hybrid API client (Static JSON + Live FastAPI fallback)
-│   │   ├── types/api.ts        # TypeScript data contracts
-│   │   ├── test/               # Vitest component & API test suite
-│   │   ├── App.tsx             # Main dashboard layout
-│   │   └── index.css           # Tailwind CSS v4 styling
+│   │   ├── components/           # Dashboard, charts, filters, audit and table
+│   │   ├── services/api.ts        # Static JSON and optional API client
+│   │   ├── types/api.ts            # TypeScript data contracts
+│   │   ├── test/                   # Vitest tests
+│   │   ├── App.tsx
+│   │   └── index.css
 │   ├── package.json
-│   ├── vercel.json             # Vercel static routing & SPA rewrites
-│   └── vite.config.ts          # Vite configuration with proxy
-├── test_live_integration.py    # End-to-end live HTTP integration test
-├── render.yaml                 # Render backend deployment blueprint
+│   ├── vercel.json
+│   └── vite.config.ts
+├── test_live_integration.py
+├── render.yaml
 ├── .gitignore
 └── README.md
 ```
 
----
-
-## ⚡ 6. Local Setup & Execution
+## 6. Local Setup and Execution
 
 ### Prerequisites
-- Python 3.11+ (or Conda)
-- Node.js 18+ and npm
 
-### A. Run Backend API
+- Python 3.11 or later
+- Node.js and npm
+
+### A. Run the backend API
+
+From the repository root:
+
 ```bash
 cd backend
 python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-The FastAPI documentation is available at `http://127.0.0.1:8000/docs`.
 
-### B. Run Frontend
+FastAPI documentation: `http://127.0.0.1:8000/docs`
+
+### B. Run the frontend
+
+Open a second terminal from the repository root:
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-The Vite frontend will open at `http://localhost:5173`. In local development, all `/api/*` requests are automatically proxied to `http://127.0.0.1:8000`.
 
----
+The Vite development server is normally available at `http://localhost:5173`. In local development, the Vite proxy forwards `/api/*` requests to `http://127.0.0.1:8000`.
 
-## 🧪 7. Automated Test Suites
+The deployed Vercel version uses the precomputed static JSON dataset by default, so a separate backend deployment is not required for the January 2026 evaluation.
 
-### Backend Tests (Pytest — 24 Tests across 5 Suites)
+## 7. Automated Tests
+
+### Backend tests — Pytest (25 tests)
+
+From the repository root:
+
 ```bash
 python -m pytest backend/tests -v
 ```
-Validates:
-- Health check and cache status endpoints
-- Documented auction cutoff options
-- Strict timezone handling (ensures $publishTime > cutoff_{D-1}$ is rejected)
-- January representative periods (Jan 1, Jan 15, Jan 31)
-- Midnight and day-end settlement period alignment
-- Independent mathematical recalculation of MAE, RMSE, Mean Bias, WAPE, and Energy MWh
-- Full verification of all 7 precomputed static JSON export datasets (`frontend/public/data/*`)
 
-### Frontend Tests (Vitest — 26 Tests across 6 Suites)
+The backend test suite covers:
+
+- Health and cache-status endpoints
+- Available cutoff configurations
+- Timezone-aware cutoff filtering and rejection of forecasts published after the cutoff
+- Representative January dates and settlement-period alignment
+- Independent calculations of MAE, RMSE, mean bias, WAPE, and energy totals
+- Integrity checks for the precomputed static export datasets
+
+### Frontend tests — Vitest (28 tests)
+
+From the repository root:
+
 ```bash
 npm --prefix frontend test -- --run
 ```
-Validates:
-- Static-mode API response fetching (`health.json`, `cutoff_options.json`, `eval_*.json`)
-- All 5 day-ahead cutoff mappings (`09:20`, `09:50`, `11:00`, `12:00`, `15:30`)
-- Client-side date slicing and dynamic KPI recomputation (MAE, RMSE, Bias, WAPE, MWh)
-- Safe JSON parsing and protection against HTML redirect responses
-- Filter controls and quick-window presets
-- Data quality indicators and zero-fabrication badge
-- Regulatory rule vs benchmark distinction in the Audit Drawer
-- KPI card formatting and over/under-forecast badge logic
-- Settlement ledger search, pagination, and CSV export trigger
 
-### Frontend Production Build
+The frontend test suite covers:
+
+- Static-mode fetching of health, cutoff, and evaluation JSON files
+- All five cutoff scenarios
+- Client-side date filtering and KPI recalculation
+- JSON parsing and handling of unexpected HTML responses
+- Filter controls and date presets
+- Data-quality indicators and audit wording
+- KPI formatting, over/under-forecast labels, and settlement-table interactions
+
+### Production build
+
 ```bash
 npm --prefix frontend run build
 ```
-Validates strict TypeScript compilation (`tsc -b`) and Vite production bundling into `frontend/dist/`.
 
-### Live End-to-End HTTP Integration Test
+This runs the TypeScript build checks and Vite production bundling.
+
+### Backend HTTP integration test
+
 ```bash
 python test_live_integration.py
 ```
-Boots a live Uvicorn socket, executes HTTP GET requests against `/api/health`, `/api/cutoff-options`, and `/api/data`, and confirms all 1,488 settlement periods pass schema validation.
+
+This test starts a local Uvicorn server and checks the API endpoints and response schema, including the January settlement-period dataset.
+
+## 8. Deployment Architecture
+
+### Mode A: Static deployment on Vercel — current live deployment
+
+- **Data files:** Precomputed evaluation JSON files live in `frontend/public/data/` and are copied into `frontend/dist/data/` during the Vite build.
+- **Routing:** Vercel serves the generated static data files directly. The catch-all rewrite in `frontend/vercel.json` supports client-side application routes.
+- **Data access:** The frontend fetches the static JSON files and performs date-range filtering and KPI recalculation in the browser.
+- **Backend requirement:** The current fixed January 2026 evaluation does not require a separately hosted backend.
+- **Scope limitation:** The deployed static dataset covers January 2026. Evaluating additional months requires regenerating the data and redeploying, or configuring a live backend.
+
+### Mode B: Optional dynamic full-stack deployment
+
+The repository also includes a FastAPI backend and deployment configuration for a future dynamic setup.
+
+- **Backend hosting:** The backend can be deployed to a compatible Python/container hosting service using `backend/Dockerfile` or `render.yaml`.
+- **Frontend configuration:** Set `VITE_API_BASE_URL` to the URL of the deployed backend when configuring a dynamic deployment.
+- **Hybrid behavior:** The API client supports a configured backend and a precomputed static-data fallback. This optional configuration should not be mistaken for the current static Vercel deployment.
+
+Actual performance, availability, and hosting costs depend on the hosting provider and its plan.
+
+To regenerate the precomputed datasets from the cached backend data, run from the repository root:
+
+```bash
+python backend/scripts/export_static_datasets.py
+```
+
+## 9. AI-Tool Disclosure
+
+AI assistance was used during development.
+
+- **AI assistant:** Google Antigravity (powered by Gemini).
+- **Assisted tasks:** Frontend scaffolding and visualization support, metrics-engine implementation support, test authoring, and review of timezone and settlement-period handling.
+- **Verification:** Tests and build checks were run during development. Any claims about independent review or regulatory validation should be limited to checks actually performed by the project author.
 
 ---
 
-## 🚀 8. Deployment Architecture & Dual Modes
+## Notes
 
-The platform supports two deployment architectures:
-
-### Mode A: Serverless Static Deployment on Vercel (Default / Zero-Maintenance)
-- **Mechanism**: The precomputed January 2026 benchmark datasets for all five cutoffs are stored under [`frontend/public/data/`](frontend/public/data/). During `npm run build`, Vite bundles them directly into `frontend/dist/data/`.
-- **Vercel Routing**: [`frontend/vercel.json`](frontend/vercel.json) routes `/data/(.*)` requests directly to the static assets before the SPA rewrite to `index.html`.
-- **Performance**: Loads in $<15\text{ ms}$ via edge CDN caching with $0\text{ s}$ cold-start delay, 100% uptime, and no hosting cost.
-- **Client-Side Slicing**: When the user selects date sub-ranges or quick presets (e.g., Week 1, Storm Jocelyn), `frontend/src/services/api.ts` filters the authentic 1,488 settlement records in memory and recalculates MAE, RMSE, Mean Bias, WAPE, and Energy Totals using the exact same formulas as the Python backend engine.
-- **Limitations**: Evaluates the January 2026 benchmark delivery period ($1,488\text{ SPs}$). Dynamic querying of un-cached future calendar months requires live backend connectivity.
-- **Export Script**: To regenerate or recompute the static datasets at any time:
-  ```bash
-  python backend/scripts/export_static_datasets.py
-  ```
-
-### Mode B: Dynamic Full-Stack Deployment (FastAPI + React)
-- **Backend Service**: Deployed to Render, Docker, or any container host using [`backend/Dockerfile`](backend/Dockerfile) or [`render.yaml`](render.yaml).
-- **Environment Variable**: Set `VITE_API_BASE_URL` on Vercel or in `.env` to your backend URL (e.g., `https://renewable-forecast-backend.onrender.com`).
-- **Hybrid Fallback**: When `VITE_API_BASE_URL` is set, `frontend/src/services/api.ts` routes requests to the live backend. If the backend is temporarily offline or spinning up, it falls back seamlessly to the precomputed static dataset.
-
----
-
-## 🤖 9. AI-Tool Disclosure
-
-In accordance with academic and institutional transparency standards:
-- **AI Pair Programming Assistant**: Google Antigravity (powered by Gemini).
-- **Assisted Tasks**:
-  - Scaffolding the React 19 + TypeScript + Tailwind CSS v4 frontend and Recharts visualizations.
-  - Designing the vectorized metrics engine in `backend/app/metrics.py`.
-  - Authoring comprehensive unit, integration, and audit verification test suites in `backend/tests/` and `frontend/src/test/`.
-  - Auditing timezone comparisons and verifying BSC settlement period alignment.
-- **Human Verification**: All code, mathematical formulas, raw Elexon BMRS API responses, and test outputs were independently reviewed, validated against official BSC standards, and empirically tested.
+- This dashboard evaluates published WINDFOR forecasts against FUELHH outturn; it does not generate an independent wind forecast.
+- Results apply to the selected January 2026 period and the documented cutoff/alignment assumptions.
+- The cutoff labels, analytical benchmarks, and engineering assumptions are distinguished in the dashboard's Audit panel.
