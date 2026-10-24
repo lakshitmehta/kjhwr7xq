@@ -2,9 +2,12 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/data/(.*)",
+      "destination": "/data/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
 }
-

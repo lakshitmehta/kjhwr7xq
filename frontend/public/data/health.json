@@ -1,0 +1,9 @@
+{
+  "status": "ok",
+  "app": "UK Renewable Wind Forecast Dashboard API",
+  "version": "1.0.0",
+  "mode": "static_precomputed",
+  "fuelhh_cache_exists": true,
+  "windfor_cache_exists": true,
+  "dataset": "January 2026 Elexon BMRS Benchmark"
+}

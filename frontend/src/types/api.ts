@@ -78,5 +78,7 @@ export interface HealthStatus {
   version: string;
   fuelhh_cache_exists: boolean;
   windfor_cache_exists: boolean;
+  mode?: string;
+  dataset?: string;
 }
 

@@ -1,0 +1,32 @@
+[
+  {
+    "cutoff_time": "09:20",
+    "name": "EPEX SPOT GB Day-Ahead (60-min)",
+    "source": "Binding Exchange Rule: EPEX SPOT Trading System Rules (09:20 GMT Gate Closure)",
+    "description": "Selects latest WINDFOR published prior to 09:20 GMT on D-1 (typically 07:30 UTC run). Legally binding order book closure for EPEX SPOT GB 60-minute day-ahead auction."
+  },
+  {
+    "cutoff_time": "09:50",
+    "name": "Nord Pool N2EX Day-Ahead Auction",
+    "source": "Binding Exchange Rule: Nord Pool Market Specification (09:50 GMT Order Book Close)",
+    "description": "Selects latest WINDFOR published prior to 09:50 GMT on D-1 (typically 09:30 UTC run). Legally binding order book closure for Nord Pool N2EX day-ahead auction."
+  },
+  {
+    "cutoff_time": "11:00",
+    "name": "Standard Day-Ahead Benchmark (SDAC Reference)",
+    "source": "Analytical Benchmark: European Single Day-Ahead Coupling (12:00 CET / 11:00 GMT)",
+    "description": "Selects latest WINDFOR published prior to 11:00 GMT on D-1 (typically 09:30 UTC run). Pan-European reference benchmark; local GB physical auctions close earlier (09:20/09:50 GMT)."
+  },
+  {
+    "cutoff_time": "12:00",
+    "name": "Midday Operational Reference",
+    "source": "Operational Convention: UK Operational Noon Scheduling Window (12:00 GMT)",
+    "description": "Selects latest WINDFOR published prior to 12:00 GMT on D-1 (typically 11:30 UTC run). Operational reference checkpoint; not an exchange gate closure."
+  },
+  {
+    "cutoff_time": "15:30",
+    "name": "EPEX SPOT GB Half-Hour Auction",
+    "source": "Binding Exchange Rule: EPEX SPOT Trading System Rules (15:30 GMT Gate Closure)",
+    "description": "Selects latest WINDFOR published prior to 15:30 GMT on D-1 (typically 11:30 UTC run). Legally binding order book closure for afternoon half-hourly auction."
+  }
+]
